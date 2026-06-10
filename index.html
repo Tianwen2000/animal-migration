@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>动物世界 · 大迁徙</title>
+<style>
+  :root{
+    --sky1:#bfe9ff; --sky2:#eaf8ff; --grass1:#9fd05a; --grass2:#f2d873;
+    --wood:#9c6b3f; --wood-d:#7a4f2c; --wood-l:#c08a52; --cream:#fff6e3; --ink:#5b3a1a;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; }
+  body{ font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:#222; color:var(--ink);
+    display:flex; justify-content:center; overflow-x:hidden; overflow-y:auto; touch-action:manipulation; user-select:none;
+    -webkit-overflow-scrolling:touch; }
+  #app{ position:relative; width:100%; max-width:480px; min-height:100%; min-height:100dvh; display:flex; flex-direction:column; overflow:hidden;
+    background:linear-gradient(180deg,var(--sky1) 0%, var(--sky2) 26%, var(--grass1) 52%, var(--grass2) 100%); }
+  .bg{ position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+  .cloud{ position:absolute; background:#fff; border-radius:50px; opacity:.85; box-shadow:28px 8px 0 -4px #fff, -26px 8px 0 -6px #fff; }
+  .hill{ position:absolute; border-radius:50%; }
+  .tree{ position:absolute; } .tree .canopy{ width:64px; height:42px; background:#6fae3a; border-radius:50% 50% 45% 45%; box-shadow:0 4px 0 #5d9730; }
+  .tree .trunk{ width:11px; height:34px; background:#8a5a2c; margin:-4px auto 0; border-radius:3px; }
+
+  /* 顶栏 */
+  #topbar{ position:relative; z-index:5; display:flex; justify-content:space-between; align-items:flex-start; padding:8px 10px 0; }
+  .title-wrap{ display:flex; flex-direction:column; gap:6px; }
+  .title{ font-size:24px; font-weight:900; color:#f5a623; -webkit-text-stroke:2px #7a4f10; text-shadow:0 3px 0 rgba(0,0,0,.2); letter-spacing:2px; }
+  .score-box{ background:rgba(255,255,255,.85); border:2px solid var(--wood); border-radius:10px; padding:3px 10px; font-weight:800; font-size:13px; display:inline-block; align-self:flex-start; }
+  .score-box b{ font-size:18px; color:#e0701c; display:inline-block; transition:transform .12s; } .score-box b.bump{ transform:scale(1.5); }
+  .right-top{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .mini-btns{ display:flex; gap:6px; } .mini-btns div{ width:26px; height:22px; background:rgba(0,0,0,.28); border-radius:11px; color:#fff; font-size:13px; display:flex; align-items:center; justify-content:center; font-weight:900; }
+  .task{ background:var(--cream); border:2px solid var(--wood); border-radius:12px; padding:6px 10px; max-width:170px; box-shadow:0 3px 6px rgba(0,0,0,.2); }
+  .task .r{ font-weight:900; font-size:14px; color:#c0504d; } .task .w{ font-size:11px; color:#7a5a30; margin-top:2px; font-weight:700; }
+
+  /* 能量栏 */
+  #energybar{ position:relative; z-index:5; display:flex; align-items:center; gap:8px; padding:6px 12px 0; }
+  .en-label{ font-size:12px; font-weight:900; color:#3a7a1e; }
+  .en-track{ flex:1; height:16px; border-radius:9px; background:rgba(0,0,0,.18); border:2px solid #fff; overflow:hidden; position:relative; display:flex; }
+  .en-seg{ flex:1; position:relative; } .en-seg+.en-seg{ border-left:2px solid rgba(255,255,255,.6); }
+  .en-seg b{ position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(180deg,#aef27a,#5ec23a); transition:width .25s; }
+  .en-btn{ border:none; border-radius:12px; padding:7px 10px; font-size:13px; font-weight:900; color:#fff; cursor:pointer; white-space:nowrap; }
+  .en-act{ background:#f2a93b; box-shadow:0 3px 0 #c47e1c; } .en-act:active{ transform:translateY(3px); box-shadow:none; }
+  .en-act.dis{ filter:grayscale(.7) brightness(.9); }
+  .en-horn{ background:#5aa9e0; box-shadow:0 3px 0 #3f80b8; } .en-horn:active{ transform:translateY(3px); box-shadow:none; }
+
+  /* 棋盘 */
+  #board-wrap{ flex:1; margin:8px; min-height:340px; position:relative; }
+  #board-wrap.picking{ z-index:55; }   /* 选择技能目标时，把棋盘抬到变暗遮罩(z50)之上，动物可点 */
+  #board{ position:relative; width:100%; height:100%; border-radius:16px; background:linear-gradient(180deg,var(--wood-l),var(--wood));
+    border:4px solid var(--wood-d); box-shadow:inset 0 0 0 3px rgba(255,255,255,.12), 0 6px 14px rgba(0,0,0,.3); padding:7px; }
+  #grid{ position:relative; width:100%; height:100%; border-radius:10px; background:rgba(255,250,235,.5); overflow:hidden; touch-action:none; }
+  .gridlines i{ position:absolute; background:rgba(124,79,44,.10); }
+  .row-hi{ position:absolute; left:0; right:0; background:rgba(255,230,120,.35); display:none; pointer-events:none; z-index:1; }
+  .ghost{ position:absolute; border:3px dashed #f5c518; border-radius:7px; display:none; pointer-events:none; z-index:2; background:rgba(245,197,24,.12); }
+  .block{ position:absolute; z-index:3; border-radius:8px; display:flex; align-items:center; cursor:grab; overflow:hidden; touch-action:none;
+    box-shadow:0 3px 0 rgba(0,0,0,.18), inset 0 2px 0 rgba(255,255,255,.35); transition:left .12s, top .18s; will-change:left,top; }
+  .block:active{ cursor:grabbing; }
+  .block .head{ font-size:20px; padding:0 2px; filter:drop-shadow(0 1px 1px rgba(0,0,0,.25)); z-index:2; }
+  .block .len{ position:absolute; right:4px; bottom:0; font-size:10px; font-weight:900; color:rgba(0,0,0,.32); }
+  .block.dragging{ opacity:.8; z-index:20; transition:none; box-shadow:0 8px 16px rgba(0,0,0,.35); }
+  .block.pop{ animation:pop .22s; } @keyframes pop{ 0%{transform:scale(.4);opacity:0} 100%{transform:scale(1);opacity:1} }
+  .block.clear{ animation:clearAway .42s forwards; } @keyframes clearAway{ to{ transform:scale(1.18); opacity:0; filter:brightness(2);} }
+  .block.sel{ outline:3px solid #f5c518; outline-offset:1px; animation:selp .8s infinite; } @keyframes selp{ 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.3)} }
+  .a-lion{ background:linear-gradient(180deg,#ffd968,#f0b400); }
+  .a-zebra{ background:repeating-linear-gradient(90deg,#fff 0 8px,#333 8px 15px); }
+  .a-ele{ background:linear-gradient(180deg,#86b3e0,#5b8fd0); }
+  .a-buf{ background:linear-gradient(180deg,#e8746f,#cf4640); }
+  .a-mon{ background:linear-gradient(180deg,#cf9b66,#a9733e); }
+  .a-hip{ background:linear-gradient(180deg,#ffb3d0,#f47ba8); }
+  .a-buf.angry{ animation:angry .5s infinite; } @keyframes angry{ 0%,100%{filter:none} 50%{filter:brightness(1.25) saturate(1.4)} }
+
+  /* 底部 */
+  #bottombar{ position:relative; z-index:5; display:flex; align-items:center; gap:8px; padding:2px 12px 8px; }
+  .btn-s{ background:var(--cream); border:2px solid var(--wood); border-radius:10px; padding:6px 12px; font-weight:800; font-size:13px; cursor:pointer; }
+  .spacer{ flex:1; }
+
+  /* 特效 */
+  .fx-layer{ position:absolute; inset:0; pointer-events:none; z-index:30; overflow:hidden; }
+  .float{ position:absolute; font-weight:900; font-size:16px; color:#fff; text-shadow:0 2px 3px rgba(0,0,0,.5); transform:translate(-50%,-50%); animation:floatUp 1s ease-out forwards; white-space:nowrap; }
+  @keyframes floatUp{ 0%{opacity:0;transform:translate(-50%,-20%) scale(.6)} 20%{opacity:1} 100%{opacity:0;transform:translate(-50%,-150%) scale(1.1)} }
+  .part{ position:absolute; border-radius:50%; transform:translate(-50%,-50%); animation:partFly .7s ease-out forwards; }
+  @keyframes partFly{ to{ opacity:0; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.3);} }
+  .smoke{ position:absolute; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,.85); transform:translate(-50%,-50%); animation:smoke .6s ease-out forwards; }
+  @keyframes smoke{ to{ opacity:0; transform:translate(-50%,-50%) scale(2.3);} }
+  .beam{ position:absolute; width:var(--bw,40px); transform:translateX(-50%); background:linear-gradient(180deg,rgba(255,230,120,.95),rgba(255,200,40,0)); border-radius:18px; animation:beam .55s ease-out forwards; z-index:25; }
+  @keyframes beam{ 0%{opacity:0;transform:translateX(-50%) scaleY(.3)} 30%{opacity:1} 100%{opacity:0;transform:translateX(-50%) scaleY(1.1)} }
+  .banner{ position:absolute; left:50%; top:40%; transform:translate(-50%,-50%); z-index:40; font-weight:900; font-size:30px; color:#fff;
+    text-shadow:0 0 10px #ff9a3c,0 3px 4px rgba(0,0,0,.5); animation:banner 1.3s ease-out forwards; white-space:nowrap; text-align:center; }
+  @keyframes banner{ 0%{opacity:0;transform:translate(-50%,-50%) scale(.4)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1.1)} 75%{opacity:1} 100%{opacity:0;transform:translate(-50%,-130%) scale(1)} }
+  .combo-txt{ position:absolute; left:50%; top:52%; transform:translate(-50%,-50%); z-index:40; font-weight:900; font-size:22px; color:#fff200; text-shadow:0 0 8px #ff5a00,0 2px 3px rgba(0,0,0,.6); animation:banner 1.1s ease-out forwards; }
+
+  /* 遮罩 / 弹窗 */
+  .dim{ position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:50; display:none; } .dim.show{ display:block; }
+  .skill-tip{ position:fixed; left:50%; top:16%; transform:translateX(-50%); z-index:60; background:var(--cream); border:3px solid var(--wood);
+    border-radius:14px; padding:10px 18px; font-weight:900; box-shadow:0 6px 16px rgba(0,0,0,.4); white-space:nowrap; display:none; }
+  .modal{ position:fixed; inset:0; z-index:70; display:none; align-items:center; justify-content:center; padding:16px; } .modal.show{ display:flex; }
+  .paper{ width:100%; max-width:320px; max-height:86%; overflow:auto; background:var(--cream); border:4px solid var(--wood); border-radius:18px; padding:18px; text-align:center;
+    box-shadow:0 12px 30px rgba(0,0,0,.5); background-image:radial-gradient(rgba(124,79,44,.05) 1px, transparent 1px); background-size:8px 8px; animation:pop .25s; }
+  .paper h2{ font-size:22px; margin-bottom:8px; } .paper .ico{ font-size:46px; margin:6px 0; }
+  .paper p{ font-size:13px; color:#6a4a26; line-height:1.6; margin-bottom:6px; font-weight:700; }
+  .paper .btns{ display:flex; gap:12px; margin-top:14px; } .paper .btns button{ flex:1; border:none; border-radius:12px; padding:10px; font-size:15px; font-weight:900; color:#fff; cursor:pointer; }
+  .btn-no{ background:#e05a4a; box-shadow:0 4px 0 #b53d2f; } .btn-yes{ background:#54c24a; box-shadow:0 4px 0 #2f8f2a; } .btn-no:active,.btn-yes:active{ transform:translateY(3px); box-shadow:none; }
+  #over .score{ font-size:34px; color:#e0701c; font-weight:900; margin:8px 0; }
+  .one-btn{ background:#54c24a; box-shadow:0 4px 0 #2f8f2a; color:#fff; border:none; border-radius:12px; padding:12px 22px; font-size:17px; font-weight:900; cursor:pointer; margin-top:8px; } .one-btn:active{ transform:translateY(3px); box-shadow:none; }
+  .codex-item{ display:flex; align-items:center; gap:10px; background:#fff; border:2px solid #e6cfa0; border-radius:12px; padding:8px 10px; margin-bottom:8px; text-align:left; }
+  .codex-ico{ width:40px; height:30px; border-radius:7px; flex:none; display:flex; align-items:center; justify-content:center; font-size:20px; }
+  .codex-d .n{ font-weight:900; font-size:14px; } .codex-d .s{ font-size:11px; color:#8a6a3a; font-weight:700; margin-top:2px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bg">
+    <div class="cloud" style="left:16%;top:7%;width:44px;height:17px;"></div>
+    <div class="cloud" style="left:64%;top:12%;width:38px;height:15px;"></div>
+    <div class="hill" style="left:-10%;top:34%;width:60%;height:24%;background:#86c34a;"></div>
+    <div class="hill" style="right:-12%;top:37%;width:60%;height:22%;background:#7bb53e;"></div>
+    <div class="tree" style="right:7%;top:30%;"><div class="canopy"></div><div class="trunk"></div></div>
+  </div>
+
+  <div id="topbar">
+    <div class="title-wrap">
+      <div class="title">动物世界</div>
+      <div class="score-box">本局积分 <b id="score">0</b></div>
+    </div>
+    <div class="right-top">
+      <div class="mini-btns"><div>···</div><div>✕</div></div>
+      <div class="task"><div class="r" id="task-r">第 1 回合</div><div class="w" id="task-w">拖动动物站满一行</div></div>
+    </div>
+  </div>
+
+  <div id="energybar">
+    <div class="en-label">⚡能量</div>
+    <div class="en-track"><div class="en-seg"><b id="en1"></b></div><div class="en-seg"><b id="en2"></b></div></div>
+    <button class="en-btn en-act" id="actBtn">激活</button>
+    <button class="en-btn en-horn" id="hornBtn">📯×3</button>
+  </div>
+
+  <div id="board-wrap">
+    <div id="board">
+      <div id="grid">
+        <div class="gridlines" id="gridlines"></div>
+        <div class="row-hi" id="rowHi"></div>
+        <div class="ghost" id="ghost"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bottombar">
+    <div class="btn-s" id="backBtn">🔄 重新开始</div>
+    <div class="spacer"></div>
+    <div class="btn-s" id="codexBtn">📖 图鉴</div>
+  </div>
+
+  <div class="fx-layer" id="appFx"></div>
+  <div class="dim" id="dim"></div>
+  <div class="skill-tip" id="skillTip">请选择场上 1 种动物激活</div>
+
+  <!-- 技能确认 -->
+  <div class="modal" id="skillModal"><div class="paper">
+    <h2>提示</h2>
+    <div class="ico" id="sm-ico">🦁</div>
+    <p id="sm-title">是否激活【狮子】</p>
+    <p id="sm-desc" style="color:#9a7a4a;"></p>
+    <div class="btns"><button class="btn-no" id="sm-no">取消</button><button class="btn-yes" id="sm-yes">确定</button></div>
+  </div></div>
+
+  <!-- 图鉴 -->
+  <div class="modal" id="codexModal"><div class="paper">
+    <h2>📖 动物图鉴</h2>
+    <div id="codex-list"></div>
+    <button class="one-btn" id="codexClose">关闭</button>
+  </div></div>
+
+  <!-- 结算 -->
+  <div class="modal" id="over"><div class="paper">
+    <h2 id="over-title">本场结束</h2>
+    <div class="ico">🏆</div>
+    <p>本场迁徙积分</p>
+    <div class="score" id="over-score">0</div>
+    <p id="over-eval" style="color:#e0701c;font-size:16px;"></p>
+    <button class="one-btn" id="restartBtn">再来一局</button>
+  </div></div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================
+ * 配置：9×11 草原，横向动物方块；拖动→站满整行触发迁徙
+ * =======================================================*/
+const COLS = 9, ROWS = 11;
+const ANIMALS = {
+  monkey:  { name:'猴子', emoji:'🐵', cls:'a-mon', maxLen:1, score:8,  energy:6,  skill:'随机让 3 只动物迁徙。' },
+  zebra:   { name:'斑马', emoji:'🦓', cls:'a-zebra',maxLen:4, score:12, energy:9,  skill:'让场上所有斑马一起迁徙。' },
+  hippo:   { name:'河马', emoji:'🦛', cls:'a-hip', maxLen:3, score:16, energy:12, skill:'让所在整行迁徙，并额外回充能量。' },
+  elephant:{ name:'大象', emoji:'🐘', cls:'a-ele', maxLen:4, score:20, energy:14, skill:'清除所在列上的所有动物，全部迁徙。' },
+  lion:    { name:'狮子', emoji:'🦁', cls:'a-lion',maxLen:4, score:26, energy:16, skill:'朝相邻动物多的一侧伸长并吞并它们一起迁徙。' },
+  buffalo: { name:'野牛', emoji:'🐃', cls:'a-buf', maxLen:3, score:36, energy:22, skill:'横向冲撞，让所在整行迁徙（高分）。' },
+};
+const KEYS = Object.keys(ANIMALS);
+const COMMON = ['monkey','zebra','hippo','elephant','lion'];   // 常规涌现池（野牛单独来袭）
+const SAVE_KEY = 'animalWorldSave_v1';
+
+/* =========================================================
+ * 状态
+ * =======================================================*/
+const state = {
+  score:0, round:1, combo:0, energy:0, maxEnergy:200, activations:0, horns:3,
+  blocks:[], status:'playing', selecting:false, uid:0,
+  nextBuffalo:7,
+};
+let cellW=40, rowH=30, busy=false;
+
+const $ = id=>document.getElementById(id);
+const grid=$('grid'), appFx=$('appFx');
+
+/* =========================================================
+ * 布局
+ * =======================================================*/
+function relayout(){
+  cellW = grid.clientWidth / COLS;
+  rowH  = grid.clientHeight / ROWS;
+  const gl=$('gridlines'); gl.innerHTML='';
+  for(let c=1;c<COLS;c++){ const i=document.createElement('i'); i.style.cssText=`left:${c*cellW}px;top:0;width:1px;height:100%;`; gl.appendChild(i); }
+  for(let r=1;r<ROWS;r++){ const i=document.createElement('i'); i.style.cssText=`top:${r*rowH}px;left:0;height:1px;width:100%;`; gl.appendChild(i); }
+  state.blocks.forEach(layoutBlock);
+}
+
+/* =========================================================
+ * 方块
+ * =======================================================*/
+function rowBlocks(r){ return state.blocks.filter(b=>b.row===r); }
+function rowSum(r){ return rowBlocks(r).reduce((s,b)=>s+b.len,0); }
+function rowFull(r){ return rowSum(r) >= COLS; }
+function topOccupied(){ return state.blocks.some(b=>b.row===0); }
+
+function makeBlock(type,row,col,len,angry){
+  const b={ id:++state.uid, type,row,col,len,angry:!!angry,el:null };
+  const el=document.createElement('div');
+  el.className='block '+ANIMALS[type].cls+' pop'+(angry?' angry':'');
+  el.innerHTML=`<span class="head">${ANIMALS[type].emoji}</span><span class="len">${len>1?('x'+len):''}</span>`;
+  el.addEventListener('pointerdown', e=>onDown(e,b));
+  grid.appendChild(el); b.el=el; state.blocks.push(b); layoutBlock(b); return b;
+}
+function layoutBlock(b){
+  b.el.style.left=(b.col*cellW+2)+'px'; b.el.style.top=(b.row*rowH+2)+'px';
+  b.el.style.width=(b.len*cellW-4)+'px'; b.el.style.height=(rowH-4)+'px';
+}
+function removeBlock(b){ if(b.el) b.el.remove(); state.blocks=state.blocks.filter(x=>x!==b); }
+function dissolve(b){ state.blocks=state.blocks.filter(x=>x!==b); const el=b.el; if(el){ el.classList.add('clear'); setTimeout(()=>el.remove(),440);} }
+
+// 在某行放置随机不重叠方块（留缺口）；buffaloRow=true 时混入野牛
+function buildRow(r, cells, buffaloRow){
+  const occ=new Array(COLS).fill(false); let placed=0,guard=0;
+  if(buffaloRow){ // 野牛占一段
+    const len=2+Math.floor(Math.random()*2), col=Math.floor(Math.random()*(COLS-len+1));
+    for(let k=0;k<len;k++) occ[col+k]=true; makeBlock('buffalo',r,col,len,true); placed+=len;
+  }
+  while(placed<cells && guard++<40){
+    const type=COMMON[Math.floor(Math.random()*COMMON.length)];
+    const maxLen=Math.min(ANIMALS[type].maxLen, cells-placed, 4);
+    const len=Math.max(1,1+Math.floor(Math.random()*maxLen));
+    const starts=[]; for(let c=0;c<=COLS-len;c++){ let okk=true; for(let k=0;k<len;k++) if(occ[c+k]){okk=false;break;} if(okk) starts.push(c); }
+    if(!starts.length) break;
+    const col=starts[Math.floor(Math.random()*starts.length)];
+    for(let k=0;k<len;k++) occ[col+k]=true; makeBlock(type,r,col,len); placed+=len;
+  }
+}
+function initBoard(){
+  state.blocks.slice().forEach(removeBlock);
+  // 初始底部 4 行
+  for(let r=ROWS-4;r<ROWS;r++) buildRow(r, 4+Math.floor(Math.random()*3), false);
+}
+
+/* =========================================================
+ * 拖拽（只能本行横向滑动，不越界/不重叠/不跨越阻挡）
+ * =======================================================*/
+let drag=null;
+function onDown(e,b){
+  if(state.status!=='playing'||busy) return;
+  if(state.selecting){ pickBlock(b); return; }
+  e.preventDefault();
+  const others=rowBlocks(b.row).filter(x=>x!==b);
+  let minCol=0,maxCol=COLS-b.len;
+  others.forEach(o=>{ if(o.col+o.len<=b.col) minCol=Math.max(minCol,o.col+o.len); if(o.col>=b.col+b.len) maxCol=Math.min(maxCol,o.col-b.len); });
+  drag={ b, startX:e.clientX, origCol:b.col, minCol, maxCol, target:b.col, moved:false };
+  b.el.classList.add('dragging'); b.el.setPointerCapture(e.pointerId);
+  const hi=$('rowHi'); hi.style.display='block'; hi.style.top=(b.row*rowH)+'px'; hi.style.height=rowH+'px';
+  b.el.addEventListener('pointermove', onMove); b.el.addEventListener('pointerup', onUp); b.el.addEventListener('pointercancel', onUp);
+}
+function onMove(e){
+  if(!drag) return;
+  const dx=e.clientX-drag.startX;
+  let px=Math.max(drag.minCol*cellW, Math.min(drag.maxCol*cellW, drag.origCol*cellW+dx));
+  drag.b.el.style.left=(px+2)+'px';
+  drag.target=Math.max(drag.minCol, Math.min(drag.maxCol, Math.round(px/cellW)));
+  if(drag.target!==drag.origCol) drag.moved=true;
+  const g=$('ghost'); g.style.display='block'; g.style.left=(drag.target*cellW)+'px'; g.style.top=(drag.b.row*rowH)+'px'; g.style.width=(drag.b.len*cellW)+'px'; g.style.height=rowH+'px';
+}
+function onUp(){
+  if(!drag) return;
+  const b=drag.b, changed=(drag.target !== drag.origCol);   // 只看最终落点是否变化
+  b.el.classList.remove('dragging');
+  b.el.removeEventListener('pointermove', onMove); b.el.removeEventListener('pointerup', onUp); b.el.removeEventListener('pointercancel', onUp);
+  $('rowHi').style.display='none'; $('ghost').style.display='none';
+  b.col=drag.target; layoutBlock(b); drag=null;
+  if(changed) endTurn();   // 最终位置改变才算完成一次拖动 = 1 回合
+  // 拖出去又拖回原位（落点未变）→ 不计回合、不涌现
+}
+
+/* =========================================================
+ * 回合结算：先迁徙（连击），再涌现新行（上顶）
+ * =======================================================*/
+function endTurn(){
+  busy=true; state.combo=0;
+  gravityDown();                     // 移动后：上方动物按重力下落填补空位
+  cascadeClears(()=>{
+    // 涌现：清空时多涌现一行
+    const emptied = state.blocks.length===0;
+    const n = emptied ? 2 : 1;
+    if(emergeRows(n)){               // 顶到顶 → 结束
+      busy=false; return;
+    }
+    gravityDown();
+    state.round++;
+    updateTask();
+    saveGame();
+    busy=false;
+  });
+}
+// 连续迁徙（同一回合内多行清除算连击）
+function cascadeClears(done){
+  const full=[]; for(let r=0;r<ROWS;r++) if(rowFull(r)) full.push(r);
+  if(!full.length){ done(); return; }
+  state.combo++;
+  banner('动物大迁徙');
+  if(state.combo>=2) combo(state.combo);
+  full.forEach(r=>migrateRow(r, state.combo));
+  setTimeout(()=>{ gravityDown(); setTimeout(()=>cascadeClears(done), 110); }, 380);
+}
+function migrateRow(r, combo){
+  const mult = 1 + (combo-1)*0.2;
+  rowBlocks(r).forEach((b,i)=>{
+    const px=b.col*cellW+b.len*cellW/2, py=r*rowH+rowH/2;
+    smoke(px,py); burst(px,py,'#7ee06a',8);
+    gainAnimal(b.type, b.len, mult);
+    dissolve(b);
+  });
+  beam(COLS*cellW/2, r*rowH, COLS*cellW*0.7);
+}
+// 某行 [col,col+len) 区间是否空（无其它方块占据）
+function cellsFree(row, col, len, self){
+  return !state.blocks.some(o=> o!==self && o.row===row && o.col < col+len && o.col+o.len > col);
+}
+// 重力：每个动物条尽可能向下掉落，直到正下方被挡或触底（移动后上方自动落下）
+function gravityDown(){
+  let moved=true;
+  while(moved){
+    moved=false;
+    const order = state.blocks.slice().sort((a,b)=>b.row-a.row);   // 从最底行开始处理
+    for(const b of order){
+      while(b.row < ROWS-1 && cellsFree(b.row+1, b.col, b.len, b)){ b.row++; moved=true; }
+    }
+  }
+  state.blocks.forEach(layoutBlock);
+}
+// 涌现 n 行（从下方顶上来）。返回 true=触顶结束
+function emergeRows(n){
+  for(let k=0;k<n;k++){
+    if(topOccupied()){ endGame(); return true; }
+    state.blocks.forEach(b=>{ b.row-=1; layoutBlock(b); });   // 整体上移
+    // 野牛来袭？
+    let buf=false;
+    if(state.round>=state.nextBuffalo){ buf=true; banner('野牛来袭'); state.nextBuffalo+=7; }
+    buildRow(ROWS-1, 4+Math.floor(Math.random()*3), buf);
+  }
+  return false;
+}
+
+/* =========================================================
+ * 积分 / 能量
+ * =======================================================*/
+function gainAnimal(type, len, mult){
+  const a=ANIMALS[type];
+  addScore(Math.round(a.score*len*mult));
+  state.energy=Math.min(state.maxEnergy, state.energy + a.energy*len);
+  updateEnergy();
+}
+function addScore(v){ state.score+=v; const el=$('score'); el.textContent=state.score; el.classList.add('bump'); setTimeout(()=>el.classList.remove('bump'),130); }
+function actCost(){ return Math.min(state.maxEnergy, 100 + state.activations*30); }   // 至少攒满一管(100)，越用越贵，最高满栏(200)
+function updateEnergy(){
+  const pct=state.energy/state.maxEnergy; // 0..1（两管）
+  $('en1').style.width=Math.min(1,pct*2)*100+'%';
+  $('en2').style.width=Math.max(0,Math.min(1,(pct-0.5)*2))*100+'%';
+  const btn=$('actBtn');
+  btn.textContent='激活('+actCost()+')';
+  btn.classList.toggle('dis', state.energy<actCost());
+  $('hornBtn').textContent='📯×'+state.horns;
+}
+function updateTask(){
+  $('task-r').textContent='第 '+state.round+' 回合';
+  const left=state.nextBuffalo-state.round;
+  $('task-w').textContent= left>0 ? ('野牛将在 '+left+' 回合后来袭') : '野牛来袭！';
+}
+
+/* =========================================================
+ * 技能（消耗能量激活动物潜能）
+ * =======================================================*/
+$('actBtn').addEventListener('click', ()=>{
+  if(state.status!=='playing'||busy) return;
+  if(state.selecting){ cancelSelect(); return; }
+  if(state.energy<actCost()){ floatTextApp('能量不足，可用📯号角补充', '#ffd24a'); return; }
+  state.selecting=true; $('dim').classList.add('show'); $('skillTip').style.display='block';
+  $('board-wrap').classList.add('picking');   // 抬高棋盘层级，使动物可被点击
+  state.blocks.forEach(b=>b.el.classList.add('sel'));
+});
+$('dim').addEventListener('click', ()=>{ if(state.selecting) cancelSelect(); });
+$('hornBtn').addEventListener('click', ()=>{
+  if(state.status!=='playing') return;
+  if(state.horns<=0){ floatTextApp('号角已用完','#ffd24a'); return; }
+  state.horns--; state.energy=Math.min(state.maxEnergy, state.energy+actCost()); updateEnergy();
+  floatTextApp('📯 号角！能量+'+actCost(), '#9ad1ff'); saveGame();
+});
+function cancelSelect(){ state.selecting=false; $('dim').classList.remove('show'); $('skillTip').style.display='none'; $('board-wrap').classList.remove('picking'); state.blocks.forEach(b=>b.el.classList.remove('sel')); }
+let pending=null;
+function pickBlock(b){
+  pending=b; cancelSelect();
+  $('sm-ico').textContent=ANIMALS[b.type].emoji;
+  $('sm-title').textContent='是否激活【'+ANIMALS[b.type].name+(b.len>1?(' x'+b.len):'')+'】';
+  $('sm-desc').textContent='技能效果：'+ANIMALS[b.type].skill+'（消耗能量 '+actCost()+'）';
+  $('skillModal').classList.add('show');
+}
+$('sm-no').addEventListener('click', ()=>{ $('skillModal').classList.remove('show'); pending=null; });
+$('sm-yes').addEventListener('click', ()=>{
+  $('skillModal').classList.remove('show');
+  if(pending){ state.energy-=actCost(); state.activations++; applySkill(pending); updateEnergy(); }
+  pending=null;
+});
+function applySkill(b){
+  const type=b.type, r=b.row;
+  busy=true; state.combo=0;
+  if(type==='lion'){
+    const row=rowBlocks(r).sort((a,c)=>a.col-c.col); const idx=row.indexOf(b);
+    let left=0,right=0;
+    for(let i=idx-1;i>=0;i--){ if(row[i].col+row[i].len===row[i+1].col) left++; else break; }
+    for(let i=idx+1;i<row.length;i++){ if(row[i-1].col+row[i-1].len===row[i].col) right++; else break; }
+    const dir=right>=left?1:-1; let i=idx+dir, n=Math.max(left,right);
+    while(n > 0 && i>=0 && i<row.length){ migrateOne(row[i],1.3); i+=dir; n--; }
+    beam((b.col+b.len/2)*cellW, r*rowH, cellW*3); banner('狮王吞噬');
+    migrateOne(b,1.5);
+  } else if(type==='elephant'){
+    banner('大象踏阵'); const col=b.col, end=b.col+b.len;
+    state.blocks.filter(v=>v.col<end && v.col+v.len>col).forEach(v=>migrateOne(v,1.2));
+  } else if(type==='buffalo'){
+    banner('野牛冲锋'); rowBlocks(r).forEach(v=>migrateOne(v,1.5));
+  } else if(type==='zebra'){
+    banner('斑马群迁'); state.blocks.filter(v=>v.type==='zebra').forEach(v=>migrateOne(v,1.2));
+  } else if(type==='monkey'){
+    banner('猴群嬉戏'); const pool=state.blocks.slice(); for(let k=0;k<3&&pool.length;k++){ const v=pool.splice(Math.floor(Math.random()*pool.length),1)[0]; migrateOne(v,1); }
+  } else { // hippo
+    banner('河马回能'); rowBlocks(r).forEach(v=>migrateOne(v,1.2)); state.energy=Math.min(state.maxEnergy, state.energy+60); floatTextApp('能量+60','#9ee06a');
+  }
+  setTimeout(()=>{ gravityDown(); setTimeout(()=>cascadeClears(()=>{
+    if(state.blocks.length===0) emergeRows(2);   // 技能把草原清空 → 额外涌现两行，避免空场卡住
+    gravityDown(); saveGame(); busy=false;
+  }),110); }, 380);
+}
+function migrateOne(b, mult){
+  if(!b||!state.blocks.includes(b)) return;
+  const px=b.col*cellW+b.len*cellW/2, py=b.row*rowH+rowH/2;
+  smoke(px,py); burst(px,py,'#7ee06a',7);
+  gainAnimal(b.type, b.len, mult||1); dissolve(b);
+}
+
+/* =========================================================
+ * 特效
+ * =======================================================*/
+function floatText(x,y,t,c){ const el=document.createElement('div'); el.className='float'; el.textContent=t; if(c)el.style.color=c; el.style.left=x+'px'; el.style.top=y+'px'; appFx.appendChild(el); setTimeout(()=>el.remove(),1000); }
+function floatTextApp(t,c){ floatText(grid.offsetLeft+grid.clientWidth/2, grid.offsetTop+30, t, c); }
+function burst(x,y,c,n){ const ox=grid.offsetLeft, oy=grid.offsetTop; for(let k=0;k<n;k++){ const p=document.createElement('div'); p.className='part'; const a=Math.PI*2*k/n+Math.random(),d=16+Math.random()*20,s=4+Math.random()*5; p.style.cssText=`left:${ox+x}px;top:${oy+y}px;width:${s}px;height:${s}px;background:${c};--dx:${Math.cos(a)*d}px;--dy:${Math.sin(a)*d-8}px;`; appFx.appendChild(p); setTimeout(()=>p.remove(),700);} }
+function smoke(x,y){ const s=document.createElement('div'); s.className='smoke'; s.style.left=(grid.offsetLeft+x)+'px'; s.style.top=(grid.offsetTop+y)+'px'; appFx.appendChild(s); setTimeout(()=>s.remove(),600); }
+function beam(x,y,w){ const b=document.createElement('div'); b.className='beam'; b.style.cssText=`--bw:${w}px;width:${w}px;left:${grid.offsetLeft+x}px;top:${grid.offsetTop+y-180}px;height:220px;`; appFx.appendChild(b); setTimeout(()=>b.remove(),560); }
+function banner(t){ const b=document.createElement('div'); b.className='banner'; b.textContent=t; appFx.appendChild(b); setTimeout(()=>b.remove(),1300); }
+function combo(n){ const c=document.createElement('div'); c.className='combo-txt'; c.textContent=n+'连迁 +'+((n-1)*20)+'%'; appFx.appendChild(c); setTimeout(()=>c.remove(),1100); }
+
+/* =========================================================
+ * 图鉴 / 结算 / 重开
+ * =======================================================*/
+function renderCodex(){
+  $('codex-list').innerHTML=KEYS.map(id=>{ const a=ANIMALS[id]; return `<div class="codex-item">
+    <div class="codex-ico ${a.cls}">${a.emoji}</div>
+    <div class="codex-d"><div class="n">${a.name}</div><div class="s">积分${a.score}/格 · 能量${a.energy}/格 · 潜能：${a.skill}</div></div></div>`; }).join('');
+}
+$('codexBtn').addEventListener('click', ()=>{ renderCodex(); $('codexModal').classList.add('show'); });
+$('codexClose').addEventListener('click', ()=>$('codexModal').classList.remove('show'));
+
+function showOverModal(){
+  $('over-score').textContent=state.score;
+  const s=state.score; $('over-eval').textContent = s>=2000?'评价：S · 迁徙大师！': s>=1000?'评价：A · 出色！': s>=400?'评价：B · 不错':'评价：C · 继续加油';
+  $('over').classList.add('show');
+}
+function endGame(){
+  if(state.status!=='playing') return; state.status='over'; cancelSelect(); saveGame();
+  showOverModal();
+}
+function restart(){
+  Object.assign(state,{ score:0,round:1,combo:0,energy:0,activations:0,horns:3,status:'playing',selecting:false,nextBuffalo:7 });
+  busy=false; cancelSelect(); $('over').classList.remove('show'); $('skillModal').classList.remove('show');
+  $('score').textContent='0'; initBoard(); relayout(); updateEnergy(); updateTask(); saveGame();
+}
+
+/* =========================================================
+ * 本地存档：localStorage（刷新后所有进度原样恢复）
+ * =======================================================*/
+function clamp(v,a,b){ v=v|0; return v<a?a:(v>b?b:v); }
+function buildSave(){
+  return { v:1, score:state.score, round:state.round, energy:state.energy, activations:state.activations,
+    horns:state.horns, nextBuffalo:state.nextBuffalo, status:state.status,
+    blocks: state.blocks.map(b=>({ type:b.type, row:b.row, col:b.col, len:b.len, angry:b.angry })) };
+}
+function saveGame(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(buildSave())); }catch(e){} }
+function loadGame(){
+  let d; try{ d=JSON.parse(localStorage.getItem(SAVE_KEY)||'null'); }catch(e){ return false; }
+  if(!d || !Array.isArray(d.blocks)) return false;
+  state.blocks.slice().forEach(removeBlock);
+  state.score=Math.max(0,d.score|0);
+  state.round=Math.max(1,d.round|0)||1;
+  state.energy=Math.min(state.maxEnergy, Math.max(0,d.energy|0));
+  state.activations=Math.max(0,d.activations|0);
+  state.horns=clamp(d.horns,0,3);
+  state.nextBuffalo=Math.max(1,d.nextBuffalo|0)||7;
+  state.status=(d.status==='over')?'over':'playing';
+  state.combo=0; state.selecting=false;
+  d.blocks.forEach(b=>{
+    if(!ANIMALS[b.type]) return;
+    const len=clamp(b.len,1,Math.min(4,COLS));
+    makeBlock(b.type, clamp(b.row,0,ROWS-1), clamp(b.col,0,COLS-len), len, !!b.angry);
+  });
+  $('score').textContent=state.score;
+  return true;
+}
+$('restartBtn').addEventListener('click', restart);
+// 底部「重新开始」二次确认：再点一次才真正重开，3 秒未确认自动取消
+let restartArmed=false, restartTimer=null;
+function disarmRestart(){ restartArmed=false; clearTimeout(restartTimer); $('backBtn').textContent='🔄 重新开始'; }
+$('backBtn').addEventListener('click', ()=>{
+  if(!restartArmed){
+    restartArmed=true; $('backBtn').textContent='⚠️ 确认重开?';
+    floatTextApp('再点一次「重新开始」确认','#ffd24a');
+    clearTimeout(restartTimer); restartTimer=setTimeout(disarmRestart, 3000);
+    return;
+  }
+  disarmRestart(); restart();
+});
+
+/* =========================================================
+ * 启动
+ * =======================================================*/
+let _init=false;
+function init(){
+  if(_init)return; _init=true;
+  relayout();
+  if(!loadGame()) initBoard();          // 有存档则恢复进度，否则新开局
+  relayout(); updateEnergy(); updateTask();
+  if(state.status==='over') showOverModal();
+}
+window.addEventListener('resize', relayout);
+window.addEventListener('load', init);
+window.addEventListener('pagehide', saveGame);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveGame(); });
+if(document.readyState==='complete') init();
+</script>
+</body>
+</html>
