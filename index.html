@@ -190,16 +190,16 @@
  * =======================================================*/
 const COLS = 9, ROWS = 11;
 const ANIMALS = {
-  monkey:  { name:'猴子', emoji:'🐵', cls:'a-mon', maxLen:1, score:8,  energy:6,  skill:'随机让 3 只动物迁徙。' },
-  zebra:   { name:'斑马', emoji:'🦓', cls:'a-zebra',maxLen:4, score:12, energy:9,  skill:'让场上所有斑马一起迁徙。' },
-  hippo:   { name:'河马', emoji:'🦛', cls:'a-hip', maxLen:3, score:16, energy:12, skill:'让所在整行迁徙，并额外回充能量。' },
-  elephant:{ name:'大象', emoji:'🐘', cls:'a-ele', maxLen:4, score:20, energy:14, skill:'清除所在列上的所有动物，全部迁徙。' },
-  lion:    { name:'狮子', emoji:'🦁', cls:'a-lion',maxLen:4, score:26, energy:16, skill:'朝相邻动物多的一侧伸长并吞并它们一起迁徙。' },
-  buffalo: { name:'野牛', emoji:'🐃', cls:'a-buf', maxLen:3, score:36, energy:22, skill:'横向冲撞，让所在整行迁徙（高分）。' },
-};
+  monkey:  { name:'猴子', emoji:'🐵', cls:'a-mon', len:1, score:8,  energy:6,  skill:'随机让 3 只动物迁徙。' },
+  zebra:   { name:'斑马', emoji:'🦓', cls:'a-zebra',len:2, score:12, energy:9,  skill:'让场上所有斑马一起迁徙。' },
+  hippo:   { name:'河马', emoji:'🦛', cls:'a-hip', len:2, score:16, energy:12, skill:'让所在整行迁徙，并额外回充能量。' },
+  elephant:{ name:'大象', emoji:'🐘', cls:'a-ele', len:3, score:20, energy:14, skill:'清除所在列上的所有动物，全部迁徙。' },
+  lion:    { name:'狮子', emoji:'🦁', cls:'a-lion',len:3, score:26, energy:16, skill:'朝相邻动物多的一侧伸长并吞并它们一起迁徙。' },
+  buffalo: { name:'野牛', emoji:'🐃', cls:'a-buf', len:4, score:36, energy:22, skill:'横向冲撞，让所在整行迁徙（高分）。' },
+};   // 每种动物固定长度：猴1 / 斑马2 / 河马2 / 大象3 / 狮子3 / 野牛4
 const KEYS = Object.keys(ANIMALS);
 const COMMON = ['monkey','zebra','hippo','elephant','lion'];   // 常规涌现池（野牛单独来袭）
-const SAVE_KEY = 'animalWorldSave_v1';
+const SAVE_KEY = 'animalWorldSave_v2';
 
 /* =========================================================
  * 状态
@@ -252,16 +252,15 @@ function dissolve(b){ state.blocks=state.blocks.filter(x=>x!==b); const el=b.el;
 // 在某行放置随机不重叠方块（留缺口）；buffaloRow=true 时混入野牛
 function buildRow(r, cells, buffaloRow){
   const occ=new Array(COLS).fill(false); let placed=0,guard=0;
-  if(buffaloRow){ // 野牛占一段
-    const len=2+Math.floor(Math.random()*2), col=Math.floor(Math.random()*(COLS-len+1));
+  if(buffaloRow){ // 野牛固定长度占一段
+    const len=ANIMALS.buffalo.len, col=Math.floor(Math.random()*(COLS-len+1));
     for(let k=0;k<len;k++) occ[col+k]=true; makeBlock('buffalo',r,col,len,true); placed+=len;
   }
-  while(placed<cells && guard++<40){
+  while(placed<cells && guard++<60){
     const type=COMMON[Math.floor(Math.random()*COMMON.length)];
-    const maxLen=Math.min(ANIMALS[type].maxLen, cells-placed, 4);
-    const len=Math.max(1,1+Math.floor(Math.random()*maxLen));
+    const len=ANIMALS[type].len;                       // 固定长度
     const starts=[]; for(let c=0;c<=COLS-len;c++){ let okk=true; for(let k=0;k<len;k++) if(occ[c+k]){okk=false;break;} if(okk) starts.push(c); }
-    if(!starts.length) break;
+    if(!starts.length) continue;                        // 该动物放不下，换一个（受 guard 限制）
     const col=starts[Math.floor(Math.random()*starts.length)];
     for(let k=0;k<len;k++) occ[col+k]=true; makeBlock(type,r,col,len); placed+=len;
   }
@@ -313,8 +312,7 @@ function onUp(){
  * =======================================================*/
 function endTurn(){
   busy=true; state.combo=0;
-  gravityDown();                     // 移动后：上方动物按重力下落填补空位
-  cascadeClears(()=>{
+  cascadeClears(()=>{                 // 先按玩家摆放判消行（拼满即消），再重力落定，最后涌现
     // 涌现：清空时多涌现一行
     const emptied = state.blocks.length===0;
     const n = emptied ? 2 : 1;
@@ -328,15 +326,19 @@ function endTurn(){
     busy=false;
   });
 }
-// 连续迁徙（同一回合内多行清除算连击）
+// 结算：先消除当前所有满行（连击）→ 重力落定 → 复查；都稳定后回调 done
 function cascadeClears(done){
   const full=[]; for(let r=0;r<ROWS;r++) if(rowFull(r)) full.push(r);
-  if(!full.length){ done(); return; }
-  state.combo++;
-  banner('动物大迁徙');
-  if(state.combo>=2) combo(state.combo);
-  full.forEach(r=>migrateRow(r, state.combo));
-  setTimeout(()=>{ gravityDown(); setTimeout(()=>cascadeClears(done), 110); }, 380);
+  if(full.length){
+    state.combo++;
+    banner('动物大迁徙');
+    if(state.combo>=2) combo(state.combo);
+    full.forEach(r=>migrateRow(r, state.combo));
+    setTimeout(()=>{ gravityDown(); setTimeout(()=>cascadeClears(done), 110); }, 380);
+    return;
+  }
+  if(gravityDown()){ setTimeout(()=>cascadeClears(done), 90); return; }   // 重力落定后可能凑出新满行 → 复查
+  done();
 }
 function migrateRow(r, combo){
   const mult = 1 + (combo-1)*0.2;
@@ -354,15 +356,16 @@ function cellsFree(row, col, len, self){
 }
 // 重力：每个动物条尽可能向下掉落，直到正下方被挡或触底（移动后上方自动落下）
 function gravityDown(){
-  let moved=true;
+  let any=false, moved=true;
   while(moved){
     moved=false;
     const order = state.blocks.slice().sort((a,b)=>b.row-a.row);   // 从最底行开始处理
     for(const b of order){
-      while(b.row < ROWS-1 && cellsFree(b.row+1, b.col, b.len, b)){ b.row++; moved=true; }
+      while(b.row < ROWS-1 && cellsFree(b.row+1, b.col, b.len, b)){ b.row++; moved=true; any=true; }
     }
   }
   state.blocks.forEach(layoutBlock);
+  return any;                                                       // 返回本次是否发生下落
 }
 // 涌现 n 行（从下方顶上来）。返回 true=触顶结束
 function emergeRows(n){
@@ -460,10 +463,10 @@ function applySkill(b){
   } else { // hippo
     banner('河马回能'); rowBlocks(r).forEach(v=>migrateOne(v,1.2)); state.energy=Math.min(state.maxEnergy, state.energy+60); floatTextApp('能量+60','#9ee06a');
   }
-  setTimeout(()=>{ gravityDown(); setTimeout(()=>cascadeClears(()=>{
+  setTimeout(()=>{ cascadeClears(()=>{
     if(state.blocks.length===0) emergeRows(2);   // 技能把草原清空 → 额外涌现两行，避免空场卡住
     gravityDown(); saveGame(); busy=false;
-  }),110); }, 380);
+  }); }, 380);
 }
 function migrateOne(b, mult){
   if(!b||!state.blocks.includes(b)) return;
@@ -533,7 +536,7 @@ function loadGame(){
   state.combo=0; state.selecting=false;
   d.blocks.forEach(b=>{
     if(!ANIMALS[b.type]) return;
-    const len=clamp(b.len,1,Math.min(4,COLS));
+    const len=ANIMALS[b.type].len;                 // 固定长度（忽略旧档记录的长度）
     makeBlock(b.type, clamp(b.row,0,ROWS-1), clamp(b.col,0,COLS-len), len, !!b.angry);
   });
   $('score').textContent=state.score;
