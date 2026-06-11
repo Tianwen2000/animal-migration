@@ -312,18 +312,15 @@ function onUp(){
  * =======================================================*/
 function endTurn(){
   busy=true; state.combo=0;
-  cascadeClears(()=>{                 // 先按玩家摆放判消行（拼满即消），再重力落定，最后涌现
-    // 涌现：清空时多涌现一行
+  cascadeClears(()=>{                 // 1) 先消除玩家这步造成的满行（含连锁）
     const emptied = state.blocks.length===0;
-    const n = emptied ? 2 : 1;
-    if(emergeRows(n)){               // 顶到顶 → 结束
+    if(emergeRows(emptied ? 2 : 1)){  // 触顶 → 结束
       busy=false; return;
     }
-    gravityDown();
-    state.round++;
-    updateTask();
-    saveGame();
-    busy=false;
+    state.round++; updateTask();
+    cascadeClears(()=>{               // 2) 涌现 / 落定后又凑满 → 再消一轮
+      gravityDown(); saveGame(); busy=false;
+    });
   });
 }
 // 结算：先消除当前所有满行（连击）→ 重力落定 → 复查；都稳定后回调 done
@@ -340,6 +337,15 @@ function cascadeClears(done){
   if(gravityDown()){ setTimeout(()=>cascadeClears(done), 50); return; }   // 重力落定后可能凑出新满行 → 复查
   done();
 }
+// 兜底监听：空闲时只要存在满行就自动消除（无论由拖动/重力/连锁/涌现造成）
+function autoResolve(){
+  if(busy || state.status!=='playing' || state.selecting) return;
+  let hasFull=false; for(let r=0;r<ROWS;r++){ if(rowFull(r)){ hasFull=true; break; } }
+  if(!hasFull) return;
+  busy=true; state.combo=0;
+  cascadeClears(()=>{ gravityDown(); saveGame(); busy=false; });   // 仅清理，不算回合、不涌现
+}
+
 function migrateRow(r, combo){
   const mult = 1 + (combo-1)*0.2;
   rowBlocks(r).forEach((b,i)=>{
@@ -567,6 +573,7 @@ function init(){
   relayout(); updateEnergy(); updateTask();
   if(state.status==='over') showOverModal();
 }
+setInterval(autoResolve, 150);   // 兜底：定时检查并消除任何遗漏的满行
 window.addEventListener('resize', relayout);
 window.addEventListener('load', init);
 window.addEventListener('pagehide', saveGame);
